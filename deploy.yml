@@ -1,0 +1,59 @@
+name: Deploy Shiny App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Check out repo
+      - uses: actions/checkout@v4
+
+      # 2. Install R
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: "4.3"
+
+      # 3. Install system dependencies (needed by ggplot2 / dplyr)
+      - name: Install system libs
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
+
+      # 4. Cache R packages for faster re-runs
+      - name: Cache R packages
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.R_LIBS_USER }}
+          key: ${{ runner.os }}-r-${{ hashFiles('requirements.txt') }}
+          restore-keys: ${{ runner.os }}-r-
+
+      # 5. Install R packages
+      - name: Install R packages
+        run: |
+          Rscript -e 'install.packages(c("shiny", "ggplot2", "dplyr", "rsconnect"),
+                        repos = "https://cloud.r-project.org")'
+
+      # 6. Deploy to shinyapps.io
+      - name: Deploy to shinyapps.io
+        env:
+          SHINYAPPS_ACCOUNT: ${{ secrets.SHINYAPPS_ACCOUNT }}
+          SHINYAPPS_TOKEN:   ${{ secrets.SHINYAPPS_TOKEN }}
+          SHINYAPPS_SECRET:  ${{ secrets.SHINYAPPS_SECRET }}
+        run: |
+          Rscript -e '
+            rsconnect::setAccountInfo(
+              name   = Sys.getenv("SHINYAPPS_ACCOUNT"),
+              token  = Sys.getenv("SHINYAPPS_TOKEN"),
+              secret = Sys.getenv("SHINYAPPS_SECRET")
+            )
+            rsconnect::deployApp(
+              appDir  = ".",
+              appName = "sales-dashboard",
+              forceUpdate = TRUE
+            )
+          '

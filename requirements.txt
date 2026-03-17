@@ -1,0 +1,4 @@
+# Packages required by this Shiny app
+shiny
+ggplot2
+dplyr
